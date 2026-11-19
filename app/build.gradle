@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.phantom.p2cx'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.phantom.p2cx'
+        minSdk 26
+        targetSdk 35
+        versionCode 6
+        versionName '0.5.0-test'
+        testInstrumentationRunner 'com.phantom.p2cx.ContractChecks'
+    }
+}
+dependencies { compileOnly 'de.robv.android.xposed:api:82' }

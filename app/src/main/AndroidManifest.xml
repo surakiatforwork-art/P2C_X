@@ -1,0 +1,33 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <queries>
+        <package android:name="com.branchphotovault" />
+        <package android:name="com.phantom.ghostshift" />
+        <package android:name="com.mca.neraapp" />
+    </queries>
+    <application android:label="P2C_X" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false">
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription" android:value="Camera image picker for app testing" />
+        <meta-data android:name="xposedminversion" android:value="93" />
+        <meta-data android:name="xposedsharedprefs" android:value="true" />
+        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+        <activity android:name=".GalleryActivity" android:exported="true" />
+        <activity android:name=".EditorActivity" android:exported="false" />
+        <provider android:name=".ImageProvider" android:authorities="com.phantom.p2cx.images" android:exported="false" android:grantUriPermissions="true" />
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+        </receiver>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".PickerActivity" android:exported="true">
+            <intent-filter><action android:name="android.media.action.IMAGE_CAPTURE" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+        </activity>
+        <service android:name=".PickerTile" android:exported="true" android:label="P2C_X" android:icon="@drawable/ic_tile" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+    </application>
+</manifest>

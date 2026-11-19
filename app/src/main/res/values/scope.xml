@@ -1,0 +1,7 @@
+<resources>
+    <string-array name="xposed_scope">
+        <item>com.branchphotovault</item>
+        <item>com.phantom.ghostshift</item>
+        <item>com.mca.neraapp</item>
+    </string-array>
+</resources>
