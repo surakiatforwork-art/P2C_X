@@ -1,14 +1,21 @@
 plugins { id 'com.android.application' }
 android {
     namespace 'com.phantom.p2cx'
-    compileSdk 35
+    compileSdk 36
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId 'com.phantom.p2cx'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '0.5.0-test'
+        versionCode 7
+        versionName '0.6.0-modern-test'
         testInstrumentationRunner 'com.phantom.p2cx.ContractChecks'
     }
 }
-dependencies { compileOnly 'de.robv.android.xposed:api:82' }
+dependencies {
+    compileOnly 'io.github.libxposed:api:102.0.0'
+    implementation 'io.github.libxposed:service:101.0.0'
+}

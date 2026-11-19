@@ -8,12 +8,7 @@
         <package android:name="com.phantom.ghostshift" />
         <package android:name="com.mca.neraapp" />
     </queries>
-    <application android:label="P2C_X" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false">
-        <meta-data android:name="xposedmodule" android:value="true" />
-        <meta-data android:name="xposeddescription" android:value="Camera image picker for app testing" />
-        <meta-data android:name="xposedminversion" android:value="93" />
-        <meta-data android:name="xposedsharedprefs" android:value="true" />
-        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+    <application android:name=".P2cApp" android:description="@string/module_description" android:label="P2C_X" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false">
         <activity android:name=".GalleryActivity" android:exported="true" />
         <activity android:name=".EditorActivity" android:exported="false" />
         <provider android:name=".ImageProvider" android:authorities="com.phantom.p2cx.images" android:exported="false" android:grantUriPermissions="true" />

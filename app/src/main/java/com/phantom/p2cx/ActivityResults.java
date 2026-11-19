@@ -8,8 +8,6 @@ import android.os.Looper;
 import java.lang.reflect.Member;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 /** Routes only the requests registered by this module through Android's result dispatcher. */
 final class ActivityResults {
@@ -33,7 +31,7 @@ final class ActivityResults {
         final int resultIndex;
         final int dataIndex;
 
-        Selection(XC_MethodHook.MethodHookParam param, int requestIndex, int resultIndex, int dataIndex) {
+        Selection(Hooks.Call param, int requestIndex, int resultIndex, int dataIndex) {
             activity = (Activity) param.thisObject;
             dispatcher = param.method;
             arguments = param.args.clone();
@@ -49,8 +47,8 @@ final class ActivityResults {
     }
 
     void install() {
-        XposedBridge.hookAllMethods(Activity.class, "dispatchActivityResult", new XC_MethodHook() {
-            @Override protected void beforeHookedMethod(MethodHookParam param) {
+        Hooks.all(Activity.class, "dispatchActivityResult", new Hooks.Callback() {
+            @Override protected void before(Hooks.Call param) {
                 Class<?>[] types = ((java.lang.reflect.Method) param.method).getParameterTypes();
                 int requestIndex = -1;
                 int resultIndex = -1;
@@ -98,8 +96,8 @@ final class ActivityResults {
         arguments[result.dataIndex] = data;
         main.post(() -> {
             if (result.activity.isDestroyed() || result.activity.isFinishing()) return;
-            try { XposedBridge.invokeOriginalMethod(result.dispatcher, result.activity, arguments); }
-            catch (Throwable error) { XposedBridge.log("P2C_X activity result: " + error); }
+            try { Hooks.original(result.dispatcher, result.activity, arguments); }
+            catch (Throwable error) { Hooks.log("P2C_X activity result: " + error); }
         });
     }
 }

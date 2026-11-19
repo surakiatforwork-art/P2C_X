@@ -1,27 +1,32 @@
 package com.phantom.p2cx;
 
-import de.robv.android.xposed.XSharedPreferences;
-import de.robv.android.xposed.XposedBridge;
+import android.content.SharedPreferences;
+import io.github.libxposed.api.XposedInterface;
 
-/** LSPosed transports settings without resolving a module component in the target app. */
+/** Reads the framework's private remote preference group, with live updates. */
 final class RuntimeState {
-    private XSharedPreferences preferences;
+    private final XposedInterface framework;
+    private SharedPreferences preferences;
     private boolean warned;
-
+    private final SharedPreferences.OnSharedPreferenceChangeListener changes = (prefs, key) -> {
+        if ("enabled".equals(key)) Hooks.log("P2C_X remote switch changed: " + prefs.getBoolean("enabled", false));
+    };
+    RuntimeState(XposedInterface framework) { this.framework = framework; }
     synchronized boolean enabled() {
         try {
-            if (preferences == null) preferences = new XSharedPreferences("com.phantom.p2cx", "state");
-            preferences.reload();
-            if (!preferences.getFile().canRead()) {
-                if (!warned) XposedBridge.log("P2C_X settings unavailable. Open P2C_X once after enabling its module.");
-                warned = true;
-                return false;
+            if (preferences == null) {
+                preferences = framework.getRemotePreferences("state");
+                preferences.registerOnSharedPreferenceChangeListener(changes);
+            }
+            if (!preferences.getBoolean("configured", false)) {
+                if (!warned) Hooks.log("P2C_X remote settings not initialized. Open P2C_X once.");
+                warned = true; return false;
             }
             return preferences.getBoolean("enabled", true);
-        } catch (Throwable error) {
-            if (!warned) XposedBridge.log("P2C_X settings: " + error);
-            warned = true;
-            return false;
+        } catch (RuntimeException unavailable) {
+            preferences = null;
+            if (!warned) Hooks.log("P2C_X remote settings unavailable: " + unavailable);
+            warned = true; return false;
         }
     }
 }

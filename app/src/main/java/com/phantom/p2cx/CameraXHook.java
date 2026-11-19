@@ -11,9 +11,6 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
 final class CameraXHook {
     private final RuntimeState state;
@@ -32,15 +29,16 @@ final class CameraXHook {
     }
 
     void install(ClassLoader loader) {
-        XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
-            @Override protected void afterHookedMethod(MethodHookParam param) {
+        Hooks.all(Activity.class, "onResume", new Hooks.Callback() {
+            @Override protected void after(Hooks.Call param) {
                 Activity foreground = (Activity) param.thisObject;
                 activity = new WeakReference<>(foreground);
                 installCapture(foreground.getClassLoader());
+                discover(foreground, foreground.getClassLoader());
             }
         });
-        XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class, new XC_MethodHook() {
-            @Override protected void afterHookedMethod(MethodHookParam param) {
+        Hooks.exact(Application.class, "attach", Context.class, new Hooks.Callback() {
+            @Override protected void after(Hooks.Call param) {
                 installCapture(loader);
                 discover((Context) param.args[0], loader);
             }
@@ -56,29 +54,29 @@ final class CameraXHook {
         new Thread(() -> {
             try {
                 for (String name : DexCaptureScanner.find(context.getApplicationInfo())) installClass(name, loader);
-            } catch (Throwable error) { XposedBridge.log("P2C_X CameraX discovery: " + error); }
+            } catch (Throwable error) { Hooks.log("P2C_X CameraX discovery: " + error); }
         }, "P2CX-discovery").start();
     }
 
     private synchronized void installClass(String name, ClassLoader loader) {
         if (installed.contains(name)) return;
-        Class<?> capture = XposedHelpers.findClassIfExists(name, loader);
+        Class<?> capture = Hooks.find(name, loader);
         if (capture == null) return;
         for (Method method : capture.getDeclaredMethods()) {
             Class<?>[] types = method.getParameterTypes();
             if (method.getReturnType() != void.class || types.length != 3 || types[1] != Executor.class) continue;
             if (name.equals("androidx.camera.core.ImageCapture") && !method.getName().equals("takePicture")) continue;
-            XposedBridge.hookMethod(method, new XC_MethodHook() {
-                @Override protected void beforeHookedMethod(MethodHookParam param) {
+            Hooks.method(method, new Hooks.Callback() {
+                @Override protected void before(Hooks.Call param) {
                     intercept(param);
                 }
             });
             installed.add(name);
-            XposedBridge.log("P2C_X CameraX ready: " + packageName + " " + method);
+            Hooks.log("P2C_X CameraX ready: " + packageName + " " + method);
         }
     }
 
-    private void intercept(XC_MethodHook.MethodHookParam param) {
+    private void intercept(Hooks.Call param) {
         if (!state.enabled()) return;
         Activity owner = activity.get();
         if (owner == null || owner.isFinishing() || owner.isDestroyed()) return;
@@ -91,7 +89,7 @@ final class CameraXHook {
                 param.setResult(null);
                 executor.execute(() -> {
                     try { callback.failure("An image selection is already pending"); }
-                    catch (Exception error) { XposedBridge.log(error); }
+                    catch (Exception error) { Hooks.log(error); }
                 });
                 return;
             }
@@ -100,7 +98,7 @@ final class CameraXHook {
             Pending pending = new Pending(context, output, callback, executor);
             main.post(() -> pending.open(owner));
         } catch (Exception error) {
-            XposedBridge.log("P2C_X unsupported CameraX contract: " + error);
+            Hooks.log("P2C_X unsupported CameraX contract: " + error);
         }
     }
 
@@ -138,13 +136,13 @@ final class CameraXHook {
                             Uri saved = output.write(context, image, state::enabled);
                             deliver("image saved", () -> callback.success(saved));
                         } catch (Exception | OutOfMemoryError error) {
-                            XposedBridge.log("P2C_X image write: " + error);
+                            Hooks.log("P2C_X image write: " + error);
                             deliver("image write error", () -> callback.failure("Cannot save selected image: " + error.getMessage()));
                         }
                     }, "P2CX-deliver").start();
                 });
                 main.postDelayed(timeout, 600000);
-                XposedBridge.log("P2C_X image selection opened: " + packageName);
+                Hooks.log("P2C_X image selection opened: " + packageName);
             } catch (RuntimeException error) { cancel("Cannot open P2C_X picker"); }
         }
 
@@ -159,8 +157,8 @@ final class CameraXHook {
             Runnable action = () -> {
                 try {
                     completion.run();
-                    XposedBridge.log("P2C_X " + outcome + ": " + packageName);
-                } catch (Throwable error) { XposedBridge.log("P2C_X callback failed: " + error); }
+                    Hooks.log("P2C_X " + outcome + ": " + packageName);
+                } catch (Throwable error) { Hooks.log("P2C_X callback failed: " + error); }
                 finally { busy.set(false); }
             };
             try { executor.execute(action); }

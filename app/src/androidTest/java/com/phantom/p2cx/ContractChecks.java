@@ -32,6 +32,7 @@ public final class ContractChecks extends Instrumentation {
             Bitmap decoded = Images.decode(context, shared, 256);
             check(decoded.getWidth() == 40 && decoded.getHeight() == 30, "JPEG decode");
             decoded.recycle();
+            modernSettings(context, report);
             editor(context, report);
             galleryUi(context, report);
             imageKeeper(context, shared, report);
@@ -84,6 +85,34 @@ public final class ContractChecks extends Instrumentation {
             android.view.View found = findView(((android.view.ViewGroup) view).getChildAt(i), type); if (found != null) return found;
         }
         return null;
+    }
+
+    private void modernSettings(Context context, StringBuilder report) throws Exception {
+        long deadline = android.os.SystemClock.uptimeMillis() + 8000;
+        while (!ModuleSettings.shared(context) && android.os.SystemClock.uptimeMillis() < deadline) {
+            android.os.SystemClock.sleep(50); waitForIdleSync();
+        }
+        check(ModuleSettings.shared(context), "Modern framework service connected");
+        Field field = ModuleSettings.class.getDeclaredField("service"); field.setAccessible(true);
+        io.github.libxposed.service.XposedService service = (io.github.libxposed.service.XposedService) field.get(null);
+        android.content.SharedPreferences remote = service.getRemotePreferences("state");
+        boolean enabled = ModuleSettings.enabled(context), boot = ModuleSettings.startOnBoot(context);
+        try {
+            ModuleSettings.setEnabled(context, false);
+            check(remote.getBoolean("configured", false) && !remote.getBoolean("enabled", true), "Remote disable persisted");
+            ModuleSettings.setEnabled(context, true);
+            check(remote.getBoolean("enabled", false), "Remote enable persisted");
+            ModuleSettings.setStartOnBoot(context, false);
+            new BootReceiver().onReceive(context, new android.content.Intent(android.content.Intent.ACTION_BOOT_COMPLETED));
+            check(!remote.getBoolean("enabled", true), "Boot disabled setting");
+            ModuleSettings.setStartOnBoot(context, true);
+            new BootReceiver().onReceive(context, new android.content.Intent(android.content.Intent.ACTION_BOOT_COMPLETED));
+            check(remote.getBoolean("enabled", false), "Boot enabled setting");
+        } finally {
+            ModuleSettings.setStartOnBoot(context, boot);
+            ModuleSettings.setEnabled(context, enabled);
+        }
+        report.append("Modern service connection, remote on/off settings and boot handler passed\n");
     }
 
     private void editor(Context context, StringBuilder report) throws Exception {

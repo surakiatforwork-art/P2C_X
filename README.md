@@ -17,7 +17,7 @@ An LSPosed/Xposed module for testing Android camera capture flows with user-sele
 
 ## Requirements and installation
 
-1. Android 8.0 or newer, with an LSPosed-compatible environment supporting Xposed API 93 or newer.
+1. Android 8.0 or newer, with an LSPosed-compatible environment supporting libxposed API 102 or newer.
 2. Install the APK from [Releases](https://github.com/surakiatforwork-art/P2C_X/releases).
 3. Enable P2C_X in LSPosed and select the target apps in its scope.
 4. Open P2C_X once and grant image access through Gallery. The module and enable-on-boot switches default to on for new settings; existing switch choices survive updates.
@@ -45,11 +45,11 @@ Original aspect ratio follows the current source image. Confirmed crop coordinat
 
 Output is JPEG, with a maximum of 8192 pixels per side and 24 megapixels. Source decoding also has a 24-megapixel limit. The editor does not overwrite the original image.
 
-Image selection/editing runs in P2C_X. A read-only URI grant gives the target access to the rendered cache file, and the target writes its own capture output. Settings use LSPosed's shared-preferences transport.
+Image selection/editing runs in P2C_X. A read-only URI grant gives the target access to the rendered cache file, and the target writes its own capture output. Settings use framework Remote Preferences; module-local preferences remain private.
 
 ## Build
 
-Use JDK 17 and Android SDK 35. The wrapper uses Gradle 8.9 and Android Gradle Plugin 8.7.2. Xposed API is a compile-only dependency from its official Maven repository.
+Use JDK 21 and Android SDK 36. The wrapper uses Gradle 8.13 and Android Gradle Plugin 8.13.2. libxposed API 102.0.0 is compile-only. The module app uses libxposed service 101.0.0 for the stable Remote Preferences interface, compatible with the API 102 framework. Both are resolved from Maven Central. targetSdk remains 35; no Android runtime permission behavior is changed by the build SDK update.
 
 Windows:
 
@@ -93,3 +93,18 @@ Pict2Cam by Adrian Garcia inspired this project: [adriangl/pict2cam](https://git
 P2C_X launcher artwork was supplied by the project owner. See [art](art/README.md).
 
 Licensed under [Apache-2.0](LICENSE).
+
+
+## Modern API migration (0.6.0-modern-test)
+
+- Replaces the legacy hook entry with XposedModule and API 102 interceptor chains.
+- Registers the entry and configurable scope through META-INF/xposed resources.
+- Removes assets/xposed_init, legacy manifest metadata, XSharedPreferences and MODE_WORLD_READABLE.
+- Private local state is mirrored to the framework on connection and on each switch/boot-setting change. Pending local changes are sent after reconnect. Editor preferences and the application ID are preserved.
+- The app shows framework connection/synchronization status. Target hooks leave the camera untouched until remote settings have been initialized.
+- The internal Hooks adapter uses only modern libxposed calls, including an original-method invoker for deferred camera-intent results. Hook chain objects are never retained across asynchronous callbacks.
+- Automatic hot reload is not enabled: fully restart scoped targets after installing the migration build.
+- Legacy v0.5.0-test remains available as a rollback build; this modern version requires API 102.
+- Tests also cover actual Remote Preferences writes and boot-handler on/off transitions. After a real reboot on the Android 15 / LSPosed 2.2.1 test device, enable-on-boot restored enabled=true and synchronized it through Remote Preferences.
+
+The project owner confirmed the modern build passed device testing before publication. Image Keeper image delivery was also observed after the real reboot.

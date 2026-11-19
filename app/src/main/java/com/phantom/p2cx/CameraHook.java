@@ -7,20 +7,19 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.MediaStore;
 import java.io.OutputStream;
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-public final class CameraHook implements IXposedHookLoadPackage {
-    @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam app) {
-        if (app.packageName.equals("com.phantom.p2cx") || app.packageName.equals("android")) return;
-        RuntimeState state = new RuntimeState();
+public final class CameraHook extends io.github.libxposed.api.XposedModule {
+    @Override public void onModuleLoaded(ModuleLoadedParam param) { Hooks.attach(this); Hooks.log("P2C_X Modern API " + getApiVersion() + " loaded: " + param.getProcessName()); }
+    @Override public void onPackageReady(PackageReadyParam app) {
+        if (!app.isFirstPackage()) return;
+        if (app.getPackageName().equals("com.phantom.p2cx") || app.getPackageName().equals("android")) return;
+        RuntimeState state = new RuntimeState(this);
+        Hooks.log("P2C_X initial remote switch: " + state.enabled());
         ActivityResults results = new ActivityResults();
         results.install();
-        new CameraXHook(state, app.packageName, results).install(app.classLoader);
-        XposedBridge.hookAllMethods(Instrumentation.class, "execStartActivity", new XC_MethodHook() {
-            @Override protected void beforeHookedMethod(MethodHookParam param) {
+        new CameraXHook(state, app.getPackageName(), results).install(app.getClassLoader());
+        Hooks.all(Instrumentation.class, "execStartActivity", new Hooks.Callback() {
+            @Override protected void before(Hooks.Call param) {
                 Activity owner = null;
                 int intentIndex = -1;
                 int requestIndex = -1;
@@ -59,16 +58,16 @@ public final class CameraHook implements IXposedHookLoadPackage {
                                 }
                             }
                             results.forward(selection, originalRequest, Activity.RESULT_OK, response);
-                            XposedBridge.log("P2C_X Camera Intent result delivered: " + app.packageName);
+                            Hooks.log("P2C_X Camera Intent result delivered: " + app.getPackageName());
                         } catch (Exception | OutOfMemoryError error) {
-                            XposedBridge.log("P2C_X Camera Intent image: " + error);
+                            Hooks.log("P2C_X Camera Intent image: " + error);
                             results.forward(selection, originalRequest, Activity.RESULT_CANCELED, null);
                         } finally { if (bitmap != null) bitmap.recycle(); }
                     }, "P2CX-intent").start();
                 });
                 param.args[requestIndex] = code;
                 param.args[intentIndex] = ActivityResults.picker();
-                XposedBridge.log("P2C_X Camera Intent intercepted: " + app.packageName);
+                Hooks.log("P2C_X Camera Intent intercepted: " + app.getPackageName());
             }
         });
     }
