@@ -33,6 +33,7 @@ final class ModuleSettings {
             SharedPreferences local = preferences(context);
             boolean committed = service.getRemotePreferences("state").edit()
                 .putBoolean("configured", true)
+                .putBoolean("license_allowed", RemoteAccess.allowed(context))
                 .putBoolean("enabled", local.getBoolean("enabled", true))
                 .putBoolean("start_on_boot", local.getBoolean("start_on_boot", true)).commit();
             if (!committed) throw new IllegalStateException("Remote settings commit failed");
@@ -44,6 +45,7 @@ final class ModuleSettings {
             android.util.Log.e("P2C_X", connection, error); return false;
         }
     }
+    static synchronized void accessChanged(Context context) { sync(context); changed(); }
     static boolean enabled(Context context) { return preferences(context).getBoolean("enabled", true); }
     static boolean startOnBoot(Context context) { return preferences(context).getBoolean("start_on_boot", true); }
     static synchronized void setEnabled(Context context, boolean enabled) {

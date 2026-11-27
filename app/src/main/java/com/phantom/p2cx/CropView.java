@@ -21,6 +21,19 @@ final class CropView extends View {
     private float downX;
     private float downY;
     private Runnable changed;
+    private boolean touching;
+    private float pointerX, pointerY, startX, startY;
+    private android.animation.ValueAnimator zoom;
+    private final Runnable expandAtEdge = new Runnable() {
+        public void run() {
+            if (!touching || handle == 0 || !isEnabled() || !outwardAtEdge()) return;
+            if (zoomOutStep()) {
+                resize((pointerX - image.left) / image.width(), (pointerY - image.top) / image.height());
+                if (changed != null) changed.run();
+                invalidate(); postOnAnimation(this);
+            }
+        }
+    };
 
     CropView(Context context) {
         super(context);
@@ -34,26 +47,18 @@ final class CropView extends View {
         sourceHeight = height;
         this.state = state;
         this.changed = changed;
+        stopMotion(); image.setEmpty(); focusCrop(false);
         invalidate();
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (bitmap == null || state == null) return;
-        float padding = Ui.dp(getContext(), 6);
-        float scale = Math.min((getWidth() - 2 * padding) / bitmap.getWidth(),
-            (getHeight() - 2 * padding) / bitmap.getHeight());
-        if (scale <= 0) return;
-        float width = bitmap.getWidth() * scale;
-        float height = bitmap.getHeight() * scale;
-        image.set((getWidth() - width) / 2, (getHeight() - height) / 2,
-            (getWidth() + width) / 2, (getHeight() + height) / 2);
-        canvas.save();
-        canvas.scale(state.flipX ? -1 : 1, state.flipY ? -1 : 1, image.centerX(), image.centerY());
+        if (image.isEmpty()) focusCrop(false);
+        if (image.isEmpty()) return;
         paint.setColor(Color.WHITE);
         paint.setStyle(Paint.Style.FILL);
-        canvas.drawBitmap(bitmap, null, image, paint);
-        canvas.restore();
+        EditorTransform.draw(canvas, bitmap, state, image, paint);
         RectF crop = screenCrop();
         paint.setColor(0x55000000);
         canvas.drawRect(image.left, image.top, image.right, crop.top, paint);
@@ -96,6 +101,8 @@ final class CropView extends View {
         float x = (event.getX() - image.left) / image.width();
         float y = (event.getY() - image.top) / image.height();
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (zoom != null) { zoom.cancel(); zoom = null; }
+            startX = pointerX = event.getX(); startY = pointerY = event.getY();
             RectF crop = screenCrop();
             float radius = Ui.dp(getContext(), 30);
             float[][] corners = {{crop.left, crop.top}, {crop.right, crop.top}, {crop.right, crop.bottom}, {crop.left, crop.bottom}};
@@ -104,13 +111,17 @@ final class CropView extends View {
                 if (Math.hypot(event.getX() - corners[index][0], event.getY() - corners[index][1]) <= radius) { handle = index + 1; break; }
             }
             if (handle == 0 && !crop.contains(event.getX(), event.getY())) return false;
+            touching = true;
             downX = x;
             downY = y;
             initial.set(state.crop);
             getParent().requestDisallowInterceptTouchEvent(true);
             return true;
         }
-        if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+        if (event.getActionMasked() == MotionEvent.ACTION_MOVE && touching) {
+            pointerX = event.getX(); pointerY = event.getY();
+            removeCallbacks(expandAtEdge);
+            if (handle != 0 && outwardAtEdge()) postOnAnimation(expandAtEdge);
             if (handle == 0) {
                 float dx = EditorState.clamp(x - downX, -initial.left, 1 - initial.right);
                 float dy = EditorState.clamp(y - downY, -initial.top, 1 - initial.bottom);
@@ -122,7 +133,9 @@ final class CropView extends View {
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_UP || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            touching = false; removeCallbacks(expandAtEdge);
             getParent().requestDisallowInterceptTouchEvent(false);
+            focusCrop(true);
             performClick();
             return true;
         }
@@ -140,7 +153,7 @@ final class CropView extends View {
         float height = Math.max(0, (EditorState.clamp(y, 0, 1) - anchorY) * (top ? -1 : 1));
         float aspect = state.aspect(sourceWidth, sourceHeight);
         if (aspect > 0) {
-            float ratio = aspect * sourceHeight / sourceWidth;
+            float ratio = aspect * state.imageHeight(sourceWidth, sourceHeight) / state.imageWidth(sourceWidth, sourceHeight);
             float maximum = Math.min(maxWidth, maxHeight * ratio);
             width = EditorState.clamp(Math.max(width, height * ratio), Math.min(.02f, maximum), maximum);
             height = width / ratio;
@@ -151,6 +164,65 @@ final class CropView extends View {
         state.crop.set(left ? anchorX - width : anchorX, top ? anchorY - height : anchorY,
             left ? anchorX : anchorX + width, top ? anchorY : anchorY + height);
     }
+
+    void focusCrop(boolean animate) {
+        if (touching || bitmap == null || state == null || getWidth() == 0 || getHeight() == 0) return;
+        float margin = Ui.dp(getContext(), 24);
+        int width = state.imageWidth(bitmap.getWidth(), bitmap.getHeight());
+        int height = state.imageHeight(bitmap.getWidth(), bitmap.getHeight());
+        float scale = Math.min((getWidth() - margin * 2) / (width * state.crop.width()),
+            (getHeight() - margin * 2) / (height * state.crop.height()));
+        if (scale <= 0) return;
+        float w = width * scale, h = height * scale;
+        RectF target = new RectF(getWidth() / 2f - state.crop.centerX() * w, getHeight() / 2f - state.crop.centerY() * h,
+            getWidth() / 2f + (1 - state.crop.centerX()) * w, getHeight() / 2f + (1 - state.crop.centerY()) * h);
+        if (zoom != null) { zoom.cancel(); zoom = null; }
+        if (!animate || image.isEmpty()) { image.set(target); invalidate(); return; }
+        if (Math.abs(image.left - target.left) + Math.abs(image.top - target.top)
+            + Math.abs(image.width() - target.width()) + Math.abs(image.height() - target.height()) < .5f) return;
+        RectF from = new RectF(image);
+        zoom = android.animation.ValueAnimator.ofFloat(0, 1); zoom.setDuration(200);
+        zoom.setInterpolator(new android.view.animation.DecelerateInterpolator());
+        zoom.addUpdateListener(animation -> {
+            float f = (Float) animation.getAnimatedValue();
+            image.set(from.left + (target.left - from.left) * f, from.top + (target.top - from.top) * f,
+                from.right + (target.right - from.right) * f, from.bottom + (target.bottom - from.bottom) * f);
+            invalidate();
+        });
+        zoom.start();
+    }
+
+    private boolean outwardAtEdge() {
+        float edge = Ui.dp(getContext(), 36), delta = Ui.dp(getContext(), 2);
+        boolean left = handle == 1 || handle == 4, top = handle == 1 || handle == 2;
+        return (left ? pointerX < edge && pointerX < startX - delta && state.crop.left > 0
+                     : pointerX > getWidth() - edge && pointerX > startX + delta && state.crop.right < 1)
+            || (top ? pointerY < edge && pointerY < startY - delta && state.crop.top > 0
+                    : pointerY > getHeight() - edge && pointerY > startY + delta && state.crop.bottom < 1);
+    }
+
+    private boolean zoomOutStep() {
+        float margin = Ui.dp(getContext(), 24);
+        int width = state.imageWidth(bitmap.getWidth(), bitmap.getHeight());
+        int height = state.imageHeight(bitmap.getWidth(), bitmap.getHeight());
+        float minimum = Math.min((getWidth() - 2 * margin) / width, (getHeight() - 2 * margin) / height);
+        float factor = Math.max(.97f, minimum * width / image.width());
+        if (factor >= .9999f) return false;
+        boolean left = handle == 1 || handle == 4, top = handle == 1 || handle == 2;
+        float anchorX = left ? initial.right : initial.left, anchorY = top ? initial.bottom : initial.top;
+        float screenX = image.left + anchorX * image.width(), screenY = image.top + anchorY * image.height();
+        float w = image.width() * factor, h = image.height() * factor;
+        image.set(screenX - anchorX * w, screenY - anchorY * h,
+            screenX + (1 - anchorX) * w, screenY + (1 - anchorY) * h);
+        return true;
+    }
+
+    private void stopMotion() {
+        touching = false; removeCallbacks(expandAtEdge);
+        if (zoom != null) { zoom.cancel(); zoom = null; }
+    }
+    @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) { stopMotion(); focusCrop(false); }
+    @Override protected void onDetachedFromWindow() { stopMotion(); super.onDetachedFromWindow(); }
 
     @Override public boolean performClick() { super.performClick(); return true; }
 }

@@ -18,7 +18,7 @@ public final class PickerActivity extends Activity {
         if (state != null) {
             return;
         }
-        Intent picker = new Intent(this, GalleryActivity.class);
+        Intent picker = TargetProfile.forward(this, new Intent(this, GalleryActivity.class));
 
         try { startActivityForResult(picker, PICK); }
         catch (Exception error) { finish(); }

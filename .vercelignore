@@ -1,0 +1,14 @@
+app/
+gradle/
+.gradle/
+build/
+art/
+third_party/
+docs/
+.git/
+*.apk
+*.zip
+*.log
+*.private.json
+.env*
+node_modules/

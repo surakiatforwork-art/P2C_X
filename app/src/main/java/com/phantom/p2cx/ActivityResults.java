@@ -79,8 +79,12 @@ final class ActivityResults {
     void forget(int code) { requests.remove(code); }
 
     int open(Activity owner, Callback callback) {
+        return open(owner, picker(), callback);
+    }
+
+    int open(Activity owner, Intent picker, Callback callback) {
         int code = register(owner, callback);
-        try { owner.startActivityForResult(picker(), code); }
+        try { owner.startActivityForResult(picker, code); }
         catch (RuntimeException error) { forget(code); throw error; }
         return code;
     }

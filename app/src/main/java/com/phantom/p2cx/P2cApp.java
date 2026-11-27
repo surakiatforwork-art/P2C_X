@@ -9,6 +9,7 @@ public final class P2cApp extends Application implements XposedServiceHelper.OnS
         super.onCreate();
         ModuleSettings.initialize(this);
         XposedServiceHelper.registerListener(this);
+        RemoteAccess.start(this);
     }
     @Override public void onServiceBind(XposedService service) { ModuleSettings.connected(this, service); }
     @Override public void onServiceDied(XposedService service) { ModuleSettings.disconnected(service); }

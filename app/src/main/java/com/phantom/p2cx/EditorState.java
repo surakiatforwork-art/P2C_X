@@ -4,9 +4,10 @@ import android.content.SharedPreferences;
 import android.graphics.RectF;
 import android.os.Bundle;
 
-/** Crop coordinates use the oriented, mirrored image, normalized to 0..1. */
+/** Crop coordinates use the EXIF-oriented, user-rotated and mirrored image, normalized to 0..1. */
 final class EditorState {
     String ratio = "original";
+    int rotation;
     boolean flipX;
     boolean flipY;
     boolean locked = true;
@@ -15,8 +16,15 @@ final class EditorState {
     int height;
     final RectF crop = new RectF(0, 0, 1, 1);
 
+    // Before profiles, confirmed adjustments were stored in the global editor file.
+    // Keep those as the initial settings until this target confirms its own settings.
+    static EditorState loadForTarget(SharedPreferences target, SharedPreferences legacy) {
+        return load(target.contains("ratio") ? target : legacy);
+    }
+
     static EditorState load(SharedPreferences prefs) {
         EditorState state = new EditorState();
+        state.rotation = Math.floorMod(prefs.getInt("rotation", 0) / 90, 4) * 90;
         state.ratio = prefs.getString("ratio", "original");
         state.flipX = prefs.getBoolean("flipX", false);
         state.flipY = prefs.getBoolean("flipY", false);
@@ -30,7 +38,7 @@ final class EditorState {
     }
 
     void save(SharedPreferences prefs) {
-        prefs.edit().putString("ratio", ratio).putBoolean("flipX", flipX).putBoolean("flipY", flipY)
+        prefs.edit().putInt("rotation", rotation).putString("ratio", ratio).putBoolean("flipX", flipX).putBoolean("flipY", flipY)
             .putBoolean("locked", locked).putBoolean("customSize", customSize)
             .putInt("width", width).putInt("height", height)
             .putFloat("left", crop.left).putFloat("top", crop.top)
@@ -39,6 +47,7 @@ final class EditorState {
 
     Bundle bundle() {
         Bundle state = new Bundle();
+        state.putInt("rotation", rotation);
         state.putString("ratio", ratio);
         state.putBoolean("flipX", flipX);
         state.putBoolean("flipY", flipY);
@@ -52,6 +61,7 @@ final class EditorState {
 
     static EditorState restore(Bundle bundle) {
         EditorState state = new EditorState();
+        state.rotation = Math.floorMod(bundle.getInt("rotation", 0) / 90, 4) * 90;
         state.ratio = bundle.getString("ratio", "original");
         state.flipX = bundle.getBoolean("flipX");
         state.flipY = bundle.getBoolean("flipY");
@@ -64,17 +74,40 @@ final class EditorState {
         return state;
     }
 
+    int imageWidth(int width, int height) { return rotation % 180 == 0 ? width : height; }
+    int imageHeight(int width, int height) { return rotation % 180 == 0 ? height : width; }
+
+    void rotateClockwise(int sourceWidth, int sourceHeight) {
+        rotation = (rotation + 90) % 360;
+        crop.set(1 - crop.bottom, crop.left, 1 - crop.top, crop.right);
+        if (ratio != null && ratio.contains(":")) { String[] parts = ratio.split(":"); ratio = parts[1] + ":" + parts[0]; }
+        boolean previousFlipX = flipX; flipX = flipY; flipY = previousFlipX;
+        int previousWidth = width; width = height; height = previousWidth;
+        fit(sourceWidth, sourceHeight);
+    }
+
     float aspect(int sourceWidth, int sourceHeight) {
+        int originalWidth = sourceWidth;
+        sourceWidth = imageWidth(originalWidth, sourceHeight);
+        sourceHeight = imageHeight(originalWidth, sourceHeight);
         switch (ratio) {
             case "free": return 0;
             case "1:1": return 1;
             case "4:3": return 4f / 3;
             case "16:9": return 16f / 9;
-            default: ratio = "original"; return sourceWidth / (float) sourceHeight;
+            default:
+                if (ratio != null && ratio.matches("[1-9][0-9]{0,4}:[1-9][0-9]{0,4}")) {
+                    String[] parts = ratio.split(":");
+                    return Integer.parseInt(parts[0]) / (float) Integer.parseInt(parts[1]);
+                }
+                ratio = "original"; return sourceWidth / (float) sourceHeight;
         }
     }
 
     void fit(int sourceWidth, int sourceHeight) {
+        int originalWidth = sourceWidth, originalHeight = sourceHeight;
+        sourceWidth = imageWidth(originalWidth, originalHeight);
+        sourceHeight = imageHeight(originalWidth, originalHeight);
         float left = finite(crop.left, 0);
         float top = finite(crop.top, 0);
         float right = finite(crop.right, 1);
@@ -83,7 +116,7 @@ final class EditorState {
         float centerY = clamp((top + bottom) / 2, 0, 1);
         float width = clamp(right - left, .02f, 1);
         float height = clamp(bottom - top, .02f, 1);
-        float aspect = aspect(sourceWidth, sourceHeight);
+        float aspect = aspect(originalWidth, originalHeight);
         if (aspect > 0) {
             float normalizedRatio = aspect * sourceHeight / sourceWidth;
             height = width / normalizedRatio;
@@ -92,10 +125,13 @@ final class EditorState {
         left = clamp(centerX - width / 2, 0, 1 - width);
         top = clamp(centerY - height / 2, 0, 1 - height);
         crop.set(left, top, left + width, top + height);
-        refreshSize(sourceWidth, sourceHeight);
+        refreshSize(originalWidth, originalHeight);
     }
 
     void refreshSize(int sourceWidth, int sourceHeight) {
+        int originalWidth = sourceWidth;
+        sourceWidth = imageWidth(originalWidth, sourceHeight);
+        sourceHeight = imageHeight(originalWidth, sourceHeight);
         float aspect = sourceWidth * crop.width() / (sourceHeight * crop.height());
         if (!customSize || width <= 0 || height <= 0) {
             width = Math.max(1, Math.round(sourceWidth * crop.width()));

@@ -2,6 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.phantom.p2cx'
     compileSdk 36
+    buildFeatures { buildConfig true }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -10,9 +11,17 @@ android {
         applicationId 'com.phantom.p2cx'
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.6.0-modern-test'
+        versionCode 13
+        versionName '0.9.1'
+        buildConfigField 'String', 'CONTROL_URL', '"' + providers.gradleProperty('p2cxControlUrl').getOrElse('https://p2cx-control.vercel.app/api/access').replace('"', '') + '"'
         testInstrumentationRunner 'com.phantom.p2cx.ContractChecks'
+    }
+    buildTypes {
+        release {
+            // Preserve the certificate used by existing distributed APKs so updates install in place.
+            signingConfig signingConfigs.debug
+            debuggable false
+        }
     }
 }
 dependencies {

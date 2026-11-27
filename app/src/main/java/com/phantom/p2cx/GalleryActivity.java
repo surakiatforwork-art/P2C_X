@@ -28,7 +28,9 @@ public final class GalleryActivity extends Activity {
     private GridView grid;
     private Uri selected;
     private String albumId = "";
-    private int generation;
+    private int generation, filterGeneration;
+    private android.content.SharedPreferences history;
+    private boolean restoring, loaded;
     private boolean editing;
     private static final class Photo {
         final Uri uri; final String album, name;
@@ -36,6 +38,10 @@ public final class GalleryActivity extends Activity {
     }
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved); setResult(RESULT_CANCELED);
+        if (!RemoteAccess.allowed(this)) { startActivity(new Intent(this, MainActivity.class)); finish(); return; }
+        if (saved == null) UsageCounters.record(this, "opens");
+        history = TargetProfile.gallery(this);
+        albumId = history.getString("album", "");
         if (saved != null) { selected = saved.getParcelable("selected"); albumId = saved.getString("album", ""); editing = saved.getBoolean("editing"); }
         LinearLayout root = Ui.root(this, true);
         LinearLayout header = Ui.row(this);
@@ -59,7 +65,7 @@ public final class GalleryActivity extends Activity {
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
         HorizontalScrollView filters = new HorizontalScrollView(this); filters.setHorizontalScrollBarEnabled(false);
         LinearLayout chips = Ui.row(this);
-        all = Ui.button(this, "\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14"); all.setOnClickListener(v -> { albumId = ""; filter(); });
+        all = Ui.button(this, "\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14"); all.setOnClickListener(v -> { selectAlbum(""); });
         all.setMinHeight(Ui.dp(this,44)); all.setMinimumHeight(Ui.dp(this,44)); all.setTextSize(13);
         chips.addView(all, new LinearLayout.LayoutParams(-2, -2)); Ui.space(chips, 8);
         album = Ui.button(this, "\u0e2d\u0e31\u0e25\u0e1a\u0e31\u0e49\u0e21 \u2304"); album.setOnClickListener(v -> chooseAlbum());
@@ -78,9 +84,14 @@ public final class GalleryActivity extends Activity {
             if (editing || position >= visible.size()) return;
             selected = visible.get(position).uri; adapter.notifyDataSetChanged();
             view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            rememberPosition();
             editing = true;
-            try { startActivityForResult(new Intent(this, EditorActivity.class).setData(selected), 20); }
+            try { startActivityForResult(TargetProfile.forward(this, new Intent(this, EditorActivity.class).setData(selected)), 20); }
             catch (RuntimeException error) { editing = false; Toast.makeText(this, "\u0e40\u0e1b\u0e34\u0e14\u0e20\u0e32\u0e1e\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e25\u0e2d\u0e07\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07", Toast.LENGTH_SHORT).show(); }
+        });
+        grid.setOnScrollListener(new AbsListView.OnScrollListener() {
+            public void onScrollStateChanged(AbsListView view, int state) { if (state == SCROLL_STATE_IDLE) rememberPosition(); }
+            public void onScroll(AbsListView view, int first, int count, int total) { }
         });
         body.addView(grid, new LinearLayout.LayoutParams(-1, 0, 1));
         TextView hint = Ui.text(this, "\u0e41\u0e15\u0e30\u0e20\u0e32\u0e1e\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e1b\u0e23\u0e31\u0e1a\u0e41\u0e25\u0e30\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19", 12); hint.setTextColor(Ui.MUTED);
@@ -105,7 +116,7 @@ public final class GalleryActivity extends Activity {
         ids.add(""); names.add("\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14");
         for (Map.Entry<String, String> entry : albums.entrySet()) { ids.add(entry.getKey()); names.add(entry.getValue()); }
         new AlertDialog.Builder(this).setTitle("\u0e2d\u0e31\u0e25\u0e1a\u0e31\u0e49\u0e21").setSingleChoiceItems(names.toArray(new String[0]), ids.indexOf(albumId),
-            (dialog, which) -> { albumId = ids.get(which); filter(); dialog.dismiss(); }).setNegativeButton("\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01", null).show();
+            (dialog, which) -> { selectAlbum(ids.get(which)); dialog.dismiss(); }).setNegativeButton("\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01", null).show();
     }
     private void load() {
         int token = ++generation;
@@ -118,7 +129,10 @@ public final class GalleryActivity extends Activity {
                     if (isDestroyed() || token != generation) return;
                     photos.clear(); photos.addAll(loaded); albums.clear();
                     for (Photo photo : photos) if (photo.album != null) albums.put(photo.album, photo.name == null ? "\u0e44\u0e21\u0e48\u0e21\u0e35\u0e0a\u0e37\u0e48\u0e2d" : photo.name);
-                    if (!albumId.isEmpty() && !albums.containsKey(albumId)) albumId = "";
+                    if (!albumId.isEmpty() && !albums.containsKey(albumId)) {
+                        albumId = ""; history.edit().putString("album", "").apply();
+                    }
+                    GalleryActivity.this.loaded = true;
                     filter();
                 });
             } catch (RuntimeException error) { runOnUiThread(() -> { if (!isDestroyed()) status.setText("\u0e2d\u0e48\u0e32\u0e19\u0e20\u0e32\u0e1e\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e2a\u0e34\u0e17\u0e18\u0e34\u0e4c"); }); }
@@ -130,8 +144,38 @@ public final class GalleryActivity extends Activity {
         status.setText(visible.size() + " \u0e20\u0e32\u0e1e" + (fullAccess() ? "" : " \u00b7 \u0e20\u0e32\u0e1e\u0e17\u0e35\u0e48\u0e2d\u0e19\u0e38\u0e0d\u0e32\u0e15"));
         Ui.select(all, albumId.isEmpty()); Ui.select(album, !albumId.isEmpty());
         album.setText(albumId.isEmpty() ? "\u0e2d\u0e31\u0e25\u0e1a\u0e31\u0e49\u0e21 \u2304" : albums.get(albumId) + " \u2304");
+        final int restoreToken = ++filterGeneration;
+        restoring = true;
         adapter.notifyDataSetChanged();
+        final String restoredAlbum = albumId;
+        final String anchor = history.getString("anchor." + albumId, "");
+        int position = history.getInt("position." + albumId, 0);
+        for (int i = 0; i < visible.size(); i++) if (visible.get(i).uri.toString().equals(anchor)) { position = i; break; }
+        final int restoredPosition = Math.max(0, Math.min(position, visible.size() - 1));
+        final int offset = history.getInt("offset." + albumId, 0);
+        grid.post(() -> {
+            if (isDestroyed() || restoreToken != filterGeneration || !restoredAlbum.equals(albumId)) return;
+            grid.setSelectionFromTop(restoredPosition, offset);
+            grid.post(() -> { if (restoreToken == filterGeneration) restoring = false; });
+        });
     }
+    private void selectAlbum(String id) {
+        if (id.equals(albumId)) return;
+        rememberPosition();
+        albumId = id;
+        history.edit().putString("album", id).apply();
+        filter();
+    }
+    private void rememberPosition() {
+        if (!loaded || restoring || grid == null || grid.getChildCount() == 0 || visible.isEmpty()) return;
+        int first = grid.getFirstVisiblePosition();
+        if (first < 0 || first >= visible.size()) return;
+        history.edit().putString("album", albumId)
+            .putString("anchor." + albumId, visible.get(first).uri.toString())
+            .putInt("position." + albumId, first)
+            .putInt("offset." + albumId, grid.getChildAt(0).getTop() - grid.getListPaddingTop()).apply();
+    }
+    @Override protected void onPause() { rememberPosition(); super.onPause(); }
     private final class GridAdapter extends BaseAdapter {
         public int getCount() { return visible.size(); }
         public Object getItem(int position) { return visible.get(position); }

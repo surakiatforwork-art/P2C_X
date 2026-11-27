@@ -95,7 +95,7 @@ final class CameraXHook {
             }
             param.setResult(null);
             Context context = owner.getApplicationContext();
-            Pending pending = new Pending(context, output, callback, executor);
+            Pending pending = new Pending(context, output, callback, executor, CaptureRecommendation.attach(ActivityResults.picker(), param.thisObject));
             main.post(() -> pending.open(owner));
         } catch (Exception error) {
             Hooks.log("P2C_X unsupported CameraX contract: " + error);
@@ -107,11 +107,13 @@ final class CameraXHook {
         private final CaptureOutput output;
         private final CaptureCallback callback;
         private final Executor executor;
+        private final android.content.Intent picker;
         private final AtomicBoolean answered = new AtomicBoolean();
         private int requestCode = -1;
         private final Runnable timeout = () -> cancel("Image selection timed out");
 
-        Pending(Context context, CaptureOutput output, CaptureCallback callback, Executor executor) {
+        Pending(Context context, CaptureOutput output, CaptureCallback callback, Executor executor, android.content.Intent picker) {
+            this.picker = picker;
             this.context = context;
             this.output = output;
             this.callback = callback;
@@ -121,7 +123,7 @@ final class CameraXHook {
         void open(Activity owner) {
             if (owner.isFinishing() || owner.isDestroyed()) { cancel("Camera activity closed"); return; }
             try {
-                requestCode = results.open(owner, selection -> {
+                requestCode = results.open(owner, picker, selection -> {
                     if (!state.enabled()) {
                         cancel("Image selection cancelled");
                         return;

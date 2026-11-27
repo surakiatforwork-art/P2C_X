@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
@@ -11,6 +13,7 @@
     <application android:name=".P2cApp" android:description="@string/module_description" android:label="P2C_X" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false">
         <activity android:name=".GalleryActivity" android:exported="true" />
         <activity android:name=".EditorActivity" android:exported="false" />
+        <activity android:name=".UpdateActivity" android:exported="false" />
         <provider android:name=".ImageProvider" android:authorities="com.phantom.p2cx.images" android:exported="false" android:grantUriPermissions="true" />
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>

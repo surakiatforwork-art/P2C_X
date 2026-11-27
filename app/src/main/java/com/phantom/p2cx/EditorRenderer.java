@@ -36,8 +36,9 @@ final class EditorRenderer {
             || (long) state.width * state.height > 24000000L) {
             throw new IOException("Use 1-8192 pixels per side and at most 24 megapixels");
         }
-        float scale = Math.min(1f, Math.max(state.width / (state.crop.width() * sourceWidth),
-            state.height / (state.crop.height() * sourceHeight)));
+        int orientedWidth = state.imageWidth(sourceWidth, sourceHeight), orientedHeight = state.imageHeight(sourceWidth, sourceHeight);
+        float scale = Math.min(1f, Math.max(state.width / (state.crop.width() * orientedWidth),
+            state.height / (state.crop.height() * orientedHeight)));
         int maxEdge = Math.max(1, (int) Math.ceil(Math.max(sourceWidth, sourceHeight) * scale));
         if (sourceWidth * (double) sourceHeight * scale * scale > 24000000) {
             throw new IOException("Source decode too large. Reduce output size");
@@ -51,13 +52,12 @@ final class EditorRenderer {
             output = Bitmap.createBitmap(state.width, state.height, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(output);
             canvas.drawColor(Color.WHITE);
-            float cropWidth = source.getWidth() * state.crop.width();
-            float cropHeight = source.getHeight() * state.crop.height();
-            canvas.scale(state.width / cropWidth, state.height / cropHeight);
-            canvas.translate(-source.getWidth() * state.crop.left, -source.getHeight() * state.crop.top);
-            if (state.flipX) { canvas.translate(source.getWidth(), 0); canvas.scale(-1, 1); }
-            if (state.flipY) { canvas.translate(0, source.getHeight()); canvas.scale(1, -1); }
-            canvas.drawBitmap(source, 0, 0, new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+            int imageWidth = state.imageWidth(source.getWidth(), source.getHeight());
+            int imageHeight = state.imageHeight(source.getWidth(), source.getHeight());
+            canvas.scale(state.width / (imageWidth * state.crop.width()), state.height / (imageHeight * state.crop.height()));
+            canvas.translate(-imageWidth * state.crop.left, -imageHeight * state.crop.top);
+            EditorTransform.draw(canvas, source, state, new android.graphics.RectF(0, 0, imageWidth, imageHeight),
+                new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
             file = new File(context.getCacheDir(), java.util.UUID.randomUUID() + ".jpg");
             try (FileOutputStream stream = new FileOutputStream(file)) { Images.jpeg(output, stream); }
             complete = true;

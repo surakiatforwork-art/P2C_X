@@ -9,3 +9,11 @@ local.properties
 *.zip
 *.log
 .DS_Store
+
+node_modules/
+dist/
+.vercel/
+.env*
+.clasp*
+*.private.json
+.vercel

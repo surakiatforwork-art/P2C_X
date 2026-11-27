@@ -22,7 +22,7 @@ final class RuntimeState {
                 if (!warned) Hooks.log("P2C_X remote settings not initialized. Open P2C_X once.");
                 warned = true; return false;
             }
-            return preferences.getBoolean("enabled", true);
+            return preferences.getBoolean("enabled", true) && preferences.getBoolean("license_allowed", false);
         } catch (RuntimeException unavailable) {
             preferences = null;
             if (!warned) Hooks.log("P2C_X remote settings unavailable: " + unavailable);

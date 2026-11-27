@@ -108,3 +108,31 @@ Licensed under [Apache-2.0](LICENSE).
 - Tests also cover actual Remote Preferences writes and boot-handler on/off transitions. After a real reboot on the Android 15 / LSPosed 2.2.1 test device, enable-on-boot restored enabled=true and synchronized it through Remote Preferences.
 
 The project owner confirmed the modern build passed device testing before publication. Image Keeper image delivery was also observed after the real reboot.
+
+
+### Gallery profiles (0.7.0 test)
+
+- Remembers the last album and scroll anchor/offset separately for each calling app. Album changes persist even when editing is cancelled. Missing or inaccessible albums fall back to all images.
+- Editor settings are now separate per calling app; standalone editing retains its existing settings.
+- The recommended aspect-ratio button uses the active CameraX capture crop rectangle, adjusted for output rotation. GhostShift 1.29 and Nera 2691.1.0 also have checked adapters for their renamed CameraX viewport/stream/rotation contracts. It changes the crop only when tapped and keeps the available image resolution. It does not force a fixed pixel size or change mirroring.
+- Unsupported camera contracts and camera intents without CameraX resolution metadata report that a recommendation is unavailable. Downstream cropping performed by the target app is not detectable through ResolutionInfo.
+
+### 0.7.1 adjustments
+
+New target editor profiles inherit the pre-profile confirmed editor settings until they save their own settings. Existing target settings take precedence. The compact recommended-ratio button appears after Free only when valid current capture dimensions are available; its visible label is แนะนำ.
+
+### 0.7.2 rotation
+
+Image rotation cycles clockwise through 0/90/180/270 degrees and is saved with confirmed per-app editor settings. Preview and export use the same transform. Rotating swaps the crop orientation and output dimensions; Reset returns to zero rotation. Recommended ratios offer portrait and landscape choices without rotating the image automatically.
+
+### 0.8.0 editor
+
+The editor uses bundled Lucide 0.468.0 vector icons (license and original SVGs included), a horizontal ratio toolbar and grouped left/right rotation and flip controls. After releasing a crop gesture, the selected region fits the preview with a short transition. Drag a corner outward to the preview edge and hold to reveal more of the source; viewport zoom never changes the exported pixel size. Existing per-app preferences, crop coordinates and capture delivery contracts remain in use.
+
+### 0.9.0 control center
+
+See [control center setup](control-center/SETUP-TH.md). Nicknames are confirmed once by the user and editable only by admins. New devices are automatically approved after registration; existing pending devices are approved on their next check. Admin blocks and the global pause remain effective. Normal checks run in the app process every 12–18 minutes with cached permission on network failure. Admin: https://p2cx-control.vercel.app/admin/ . Device access and user switch are independent.
+
+### 0.9.1 stable
+
+Refined home screen and a dedicated optional updater with download progress, SHA-256 verification when supplied by GitHub, package/certificate/version checks, and Android installation confirmation. Users choose when to check, download and install. See [update publishing requirements](docs/app-updates.md).
